@@ -1,0 +1,68 @@
+name: Build Universal Dragon Systems APK
+
+on:
+  push:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Add Capacitor Android Platform
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          else
+            npx cap sync android
+          fi
+
+      - name: Configure Universal Compatibility (Android 5.0+ & All Phones)
+        run: |
+          # Force minSdkVersion to 21 (Android 5.0 Lollipop and above) for maximum device compatibility
+          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 21/g' android/variables.gradle || true
+          # Enable clearTextTraffic and hardwareAcceleration in AndroidManifest.xml
+          sed -i 's/<application/<application android:usesCleartextTraffic="true" android:hardwareAccelerated="true"/g' android/app/src/main/AndroidManifest.xml || true
+
+      - name: Generate Launcher Icons & Splash Screen from Logo
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#080c16' --splashBackgroundColor '#080c16'
+
+      - name: Sync Web Content
+        run: npx cap sync android
+
+      - name: Build Universal APK
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Rename APK to Dragon-Systems.apk
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./Dragon-Systems-Universal.apk
+
+      - name: Upload Ready APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dragon-Systems-APK
+          path: ./Dragon-Systems-Universal.apk

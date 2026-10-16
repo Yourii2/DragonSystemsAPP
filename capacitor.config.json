@@ -1,0 +1,19 @@
+{
+  "appId": "online.dragonsystems.app",
+  "appName": "Dragon Systems",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": [
+      "*.dragon-systems.online",
+      "dragon-systems.online"
+    ]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}
