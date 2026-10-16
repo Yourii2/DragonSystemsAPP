@@ -24,10 +24,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK components
+      - name: Install Android SDK cmdline-tools & components (manual)
         env:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
@@ -35,27 +32,48 @@ jobs:
           SDK_ROOT="${ANDROID_SDK_ROOT}"
           echo "Using ANDROID_SDK_ROOT=$SDK_ROOT"
 
-          # Try common locations for sdkmanager
+          # Ensure SDK root exists and is writable
+          sudo mkdir -p "$SDK_ROOT"
+          sudo chown -R $USER:$USER "$SDK_ROOT"
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+
+          # Download Google commandline tools (تعديل اسم الملف إذا تغيّر على dl.google)
+          cd /tmp
+          CMDLINE_Z=commandlinetools-linux-9477386_latest.zip
+          if [ ! -f "$CMDLINE_Z" ]; then
+            curl -fsSL -o "$CMDLINE_Z" "https://dl.google.com/android/repository/$CMDLINE_Z"
+          fi
+          unzip -o "$CMDLINE_Z" -d cmdline-temp
+
+          # Remove any previous 'latest' to avoid mv overwrite errors, then move extracted files
+          rm -rf "$SDK_ROOT/cmdline-tools/latest"
+          mkdir -p "$SDK_ROOT/cmdline-tools/latest"
+          mv cmdline-temp/cmdline-tools/* "$SDK_ROOT/cmdline-tools/latest/" || true
+
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$SDK_ROOT/cmdline-tools/16.0/bin/sdkmanager"
-          fi
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$SDK_ROOT/cmdline-tools/bin/sdkmanager"
-          fi
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager not found at expected locations. Listing $SDK_ROOT for debugging:" >&2
-            ls -la "$SDK_ROOT" || true
+            echo "sdkmanager not found at $SDKMANAGER" >&2
+            ls -la "$SDK_ROOT/cmdline-tools" || true
             exit 1
           fi
+          echo "Found sdkmanager: $SDKMANAGER"
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
 
-          echo "Found sdkmanager at: $SDKMANAGER"
+          # Temporarily disable pipefail around yes|sdkmanager to avoid SIGPIPE causing the whole script to fail
+          set +o pipefail
 
-          # Install/update core components and accept licenses non-interactively
-          # Adjust android API level / build-tools version as needed by your project
-          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          # Install required components (عدل api/build-tools لو مشروعك يحتاج نسخ أخرى)
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest"
+
+          # Accept licenses non-interactively
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses || true
+
+          # Re-enable pipefail
+          set -o pipefail
+
+          # Debug info
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --version || true
+          ls -la "$SDK_ROOT" || true
 
       - name: Install Dependencies
         run: npm install
@@ -68,11 +86,13 @@ jobs:
             npx cap sync android
           fi
 
-      - name: Configure Universal Compatibility (Android 5.0+ & All Phones)
+      - name: Configure Universal Compatibility (set minSdk to 22)
         run: |
-          # Force minSdkVersion to 21 (Android 5.0 Lollipop and above) for maximum device compatibility
-          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 21/g' android/variables.gradle || true
-          # Enable clearTextTraffic and hardwareAcceleration in AndroidManifest.xml
+          # Ensure project minSdk >= 22 to satisfy libraries like cordova:framework:10.1.1
+          # Try updating variables.gradle first, fallback to android/app/build.gradle
+          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 22/g' android/variables.gradle || true
+          sed -i 's/minSdkVersion [0-9]\+/minSdkVersion 22/g' android/app/build.gradle || true
+          # Enable clearTextTraffic and hardwareAcceleration
           sed -i 's/<application/<application android:usesCleartextTraffic="true" android:hardwareAccelerated="true"/g' android/app/src/main/AndroidManifest.xml || true
 
       - name: Generate Launcher Icons & Splash Screen from Logo
