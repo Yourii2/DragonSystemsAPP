@@ -70,8 +70,8 @@ jobs:
 
       - name: Configure Universal Compatibility (Android 5.0+ & All Phones)
         run: |
-          # Force minSdkVersion to 21 (Android 5.0 Lollipop and above) for maximum device compatibility
-          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 21/g' android/variables.gradle || true
+          # Force minSdkVersion to 22 (Android 5.0 Lollipop and above) for maximum device compatibility
+          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 22/g' android/variables.gradle || true
           # Enable clearTextTraffic and hardwareAcceleration in AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true" android:hardwareAccelerated="true"/g' android/app/src/main/AndroidManifest.xml || true
 
